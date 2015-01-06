@@ -2,13 +2,16 @@ extensions [array]
 
 ;;Known bug: merging between clusters that only touch diagonally
 ;;fix: I HAVE NO IDEA
+;;hypothesis: this problem does not occur when the split function is commented out, but
+;;almost always occurs when it is not. Maybe there's an issue splitting?
 
 globals 
 [
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
-  
+  maxSize ;;maximum size of each cluster, increases with time
+  growthRate ;;rate that the max size grows
   ;;initializes an array of 100 values to 100. These values will be the record low energies found by each group such that
   ;; energy[a]=b means the lowest energy of a block of size a was b
   record-low-E
@@ -53,6 +56,9 @@ to setup
   set record-low-E array:from-list n-values (number + 1) [100]
   ;;Create scoreboard array
   
+  set maxSize 2
+  set growthRate 1 / 30
+  
   reset-ticks
 end
 
@@ -68,7 +74,7 @@ to go
 
   link-all
 
-  show-all-stats
+  ;;show-all-stats
 
   ask nodes 
   [
@@ -80,6 +86,7 @@ to go
   split-all
 
   update-plot 
+  
   tick
 end
 
@@ -91,6 +98,8 @@ to split
 end
 
 to split-all
+  set maxSize maxSize + growthRate
+  
   let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
 
 let counter 2 ;;counter will start at 2
@@ -113,7 +122,7 @@ while [counter <= max-number-of-parts]
        let dos-who who ;;that's dos as in the spanish number
        let dos leader-energy  / number-of-parts 
        ;;type "normalized energy of this other leader:" show dos
-       if dos != 0 and dos > uno
+       if (dos != 0 and dos > uno) or (number-of-parts > maxSize)
        [
         set will-split true
        ]
@@ -267,7 +276,7 @@ to link-up
   ask walkers with [leader = [leader] of myself] [ask my-links [untie die]]
   set number-of-parts 1
   let otherneighbors other walkers with [leader = [leader] of myself]
-  create-links-with other walkers with [leader = [leader] of myself] [tie hide-link]
+  create-links-with otherneighbors [tie hide-link]
   set number-of-parts number-of-parts + count otherneighbors 
 end  
 
