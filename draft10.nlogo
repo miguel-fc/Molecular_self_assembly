@@ -1,16 +1,19 @@
-globals [ ;;change
+extensions [array]
+
+globals [
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
-  ;total-energy
-  ;most-energetic-walkers
-  minillo
+  
+  ;;initializes an array of 100 values to 100. These values will be the record low energies found by each group such that
+  ;; energy[a]=b means the lowest energy of a block of size a was b
+  record-low-E
 ]
 breed [nodes node]
 breed [walkers walker]
-;breed [most-energetic-walker most-energetic-walkers]
-walkers-own [location leader probability  itrans-accepted walker-energy leader-energy number-of-parts]  
-               ;node  walker number  node-list number
+nodes-own [full]
+walkers-own [location leader probability  itrans-accepted walker-energy leader-energy prev-leader-energy number-of-parts]
+
 
 ;Set up routine: creates a grid of patches. Puts nodes on each patch, links them and then puts 
 ;a number of walkers on the nodes. 
@@ -34,13 +37,17 @@ to setup
 ;;Put "walkers" on the lattice
   set-default-shape walkers "square"
   set colors [red blue black] ; different colors represent -/+/neutral charges.
-  create-walkers number 
+  create-walkers number
   [
     set color item random 3 colors
     set location one-of nodes
     set leader self
     move-to location
   ]
+  
+  set record-low-E array:from-list n-values (number + 1) [100]
+  ;;Create array
+  
   reset-ticks
 end
 
@@ -50,24 +57,23 @@ to go
 choose_direction
 
 ;Merge walkers    
-ask walkers 
-[
-  let cands_on_neighbs walkers-on neighbors4
-  let candidates cands_on_neighbs with [leader != [leader] of myself]  
-  
-  if any? candidates[ 
-    create-links-with candidates [tie]
-    ask candidates [merge]
-  ] 
-]
+everybody-merge
 
+
+;;type " global energy " show global-energy
+find-global-energy
+;;type " global energy " show global-energy
 ;Compute the energy of each leader
+;ask walkers [ask my-links [untie die]]
+;ask walkers with [leader = self] [ask my-out-connections [untie die]]
 ask walkers with [leader = self] [
   link-all 
+  set leader-energy 0
   compute_energy_of_this_leader
   ]
 
 ;----Writing out statements to check the code---
+
 show " Energy of each walker"
 ask walkers [
  show walker-energy
@@ -81,49 +87,36 @@ ask walkers with [leader = self] [
 show " # of parts of each leader"
 ask walkers with [leader = self]  [
   show number-of-parts
-  ;let unique-parts number-of-part
+  let unique-parts number-of-parts
 ]
 
-
-let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
-;type "pepillo " show max-number-of-parts
-
-;show sort [number-of-parts] of walkers with [leader = self]
-
-; What follows is the beginning of splitting 
-let pepillo  0
-while [ pepillo < max-number-of-parts] [set pepillo pepillo + 1   
-  if any? walkers with [leader = self and number-of-parts = pepillo] [
-    let uno 0 
-    let uno-who 0
-    ask min-n-of 1 walkers with [leader = self and number-of-parts = pepillo] [leader-energy] [ 
-      set uno leader-energy / number-of-parts
-      ;if number-of-parts > 0 [
-      type who type " leader-energy " type leader-energy type " # of parts " write number-of-parts 
-      type " normalized energy " show leader-energy / number-of-parts
-      ;show uno
-      set uno-who who
-      ;show uno-who
-      ]
-    ;]
-    ask walkers with [leader = self and [number-of-parts] of self >= pepillo] [
-      ;show [who] of 
-      ;let uno [leader-energy] of myself / [number-of-parts] of myself
-      let dos-who who
-      ;show dos-who
-      let dos leader-energy  / number-of-parts 
-      if dos != 0 and dos >= uno and uno-who != dos-who [ type " split " show [who] of self] 
-      ;[type " no one to split"]
-    ]
-]
+show "links of each walker"
+ask walkers  [
+  show count my-links
 ]
 
-;ask walkers with [leader = self] [show who]
+;ask nodes [ifelse nany? walkers-here [set full 1] [set full 0]]
+ask nodes [ifelse not any? walkers-here [set full 0][set full 1]]
+;show count nodes with [full = 1]  
+;show count nodes with [full = 0]
 
+;ask walkers with [leader = self]
+;show 
 
+    
+;set emptynodes nodes with no-walkers-here
+;ask nodes [ 
+  ;if not any? walkers-here [set emptynodes lput location emptynodes] ]
+;;;;type "number of fullnodes " show fullnodes
+;show length emptynodes
+
+;ask nodes with [;;type "this node is full"]
+
+;What follows is the beginning of the splitting routine
+split-all
  
-find_global-energy
-type " global energy " show global-energy
+;find-global-energy
+;;type " global energy " show global-energy
 
 
 ;-------End writing out statements-----
@@ -132,15 +125,111 @@ update-plot
 tick
 end
 
+to split
+  set leader self 
+  ;;set color yellow
+  ask my-links [untie die] 
+  move-to one-of nodes with [full = 0] 
+end
+
+to split-all
+  let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
+
+let counter 2 ;;counter will start at 2
+while [counter <= max-number-of-parts] 
+[
+  ;let did-split false
+  
+  if any? walkers with [leader = self and number-of-parts = counter] 
+  [
+    ;let uno 0 ;;uno is the normalized energy, that is, E/n
+    let uno-who 0 ;;uno-who is the one with the energy
+    let will-split false
+    
+    ;ask min-one-of walkers with [leader = self and number-of-parts = counter] [leader-energy] 
+    ;[ 
+    ;  set uno leader-energy / number-of-parts
+    ;  ;;type who ;;type " leader-energy " ;;type leader-energy ;;type ", # of parts " write number-of-parts 
+    ;  ;;type ", normalized energy " show leader-energy / number-of-parts
+    ;  set uno-who who
+    ;]
+    
+    let uno (array:item record-low-E counter) / counter
+    ;;type "minimum record energy for " show counter ;;type " parts: " show uno
+    
+    ask walkers with [leader = self and number-of-parts = counter] 
+    [ 
+      ;ifelse number-of-parts = counter
+      ;[
+      ; ;;type "spliting more unstable conglomerate of same size..."
+      ; set will-split true 
+      ;]
+      ;[
+       let dos-who who ;;that's dos as in the spanish number
+       let dos leader-energy  / number-of-parts 
+       ;;type "normalized energy of this other leader:" show dos
+       if dos != 0 and dos > uno
+       [
+        set will-split true
+       ]
+      ;]
+      
+    
+      
+      if will-split
+      [
+        ;;type " split this leader" 
+        let leaderon who
+        show [who] of self
+        ;;type "leaderon " show leaderon
+        ask other walkers with [leader = [leader] of myself] 
+        [
+          ;;type "parts of this leader"  show walker-energy
+        ]
+        ask max-one-of walkers with [leader = [leader] of myself] [walker-energy] 
+        [
+          ;;makes a new leader, if necessary
+          if who = leaderon 
+          [
+            let new-leader one-of other walkers with [leader = [leader] of myself]
+            ask other walkers with [leader = [leader] of myself]
+            [
+              set leader new-leader
+            ]
+          ]
+
+          ;;type "the weakest link is the walker" show who 
+          
+          split
+        ]
+      
+      ]         
+       
+    ]
+    
+    ;;re-evaluate leaders and existance and such
+    find-global-energy
+    everybody-merge
+    ask walkers with [leader = self]
+    [
+      link-all
+    ]
+  ]
+  set counter counter + 1  
+]
+
+end
+
 ;Takes test steps in each of the four directions.
 to choose_direction
- 
+  
 
 ask walkers with [leader = self] 
       [         
 ;Initializing values 
+        ;set emptynodes [] 
         set probability 0      
-        find_global-energy
+        find-global-energy
         ;compute_energy_of_this_leader
         set previous-global-energy global-energy
 ;Initialize the number of translational steps accepted
@@ -162,7 +251,8 @@ ask walkers with [leader = self]
           compute-energy-of-this-movement
           ifelse global-energy <= previous-global-energy [ set previous-global-energy global-energy ][
             compute-probability-of-this-movement
-            ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot1 * 90]
+            ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot1 * 90 
+              compute-energy-of-this-movement]
           ]
         ]            
 
@@ -170,39 +260,43 @@ ask walkers with [leader = self]
         if movement = 1 [
           set-location one-of [link-neighbors at-points [[0 -1] ] ] of location
           monte-carlo
-          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[0 1] ] ] of location]
+          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[0 1] ] ] of location
+            compute-energy-of-this-movement]
         ]
 
 ;up
         if movement = 2 [
           set-location one-of [link-neighbors at-points [[0 1] ] ] of location
           monte-carlo
-          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[0 -1] ] ] of location]
+          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[0 -1] ] ] of location
+            compute-energy-of-this-movement]
         ]          
 
 ;right
         if movement = 3 [
           set-location one-of [link-neighbors at-points [[1 0] ] ] of location
           monte-carlo
-          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[-1 0] ] ] of location]
+          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[-1 0] ] ] of location
+            compute-energy-of-this-movement]
         ]
         
 ;left
         if movement = 4 [
           set-location one-of [link-neighbors at-points [[-1 0] ] ] of location
           monte-carlo
-          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[1 0] ] ] of location]
+          if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[1 0] ] ] of location
+            compute-energy-of-this-movement]
         ]                             
       ]   
 end
  
 
 ;Finds the total global-energy (Note the /2 is to avoid double counting).
-to find_global-energy
+to find-global-energy
   set global-energy  0
   ask walkers [
     set walker-energy 0
-    set leader-energy 0
+    ;set leader-energy 0
     if [color] of self  = blue [blue_energy_row]                        
     if [color] of self  = red [red_energy_row]    
     if [color] of self  = black [black_energy_row] 
@@ -215,16 +309,32 @@ end
 to merge 
       set leader [leader] of myself
       ask link-neighbors with [leader != [leader] of myself] 
+      ;ask other walkers with [leader 
       [ merge ]
+end
+
+to everybody-merge
+  ask walkers 
+  [
+  let cands_on_neighbs walkers-on neighbors4
+  let candidates cands_on_neighbs with [leader != [leader] of myself]  
+  
+  if any? candidates[ 
+    create-links-with candidates [tie]
+    ask candidates [merge]
+   ] 
+  ]
 end
 
 ; Links each leader to its parts
 to link-all
+  ask walkers with [leader = [leader] of myself] [ask my-links [untie die]]
   set number-of-parts 1
   let otherneighbors other walkers with [leader = [leader] of myself]
-  create-links-with otherneighbors [tie hide-link] 
+  create-links-with other walkers with [leader = [leader] of myself] [tie hide-link]
   set number-of-parts number-of-parts + count otherneighbors 
 end  
+
 
 ; Required to move agents on the grid
 to set-location [new-location]  
@@ -243,7 +353,7 @@ to compute-energy-of-this-movement
     ]
   ]
   ifelse ifind = 0 
-    [find_global-energy 
+    [find-global-energy 
     ]
     [set global-energy 1000]
 end
@@ -277,7 +387,8 @@ to monte-carlo
     compute-energy-of-this-movement
     ifelse global-energy <= previous-global-energy [ set previous-global-energy global-energy ][
       compute-probability-of-this-movement
-      ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot1 * 90]
+      ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot1 * 90
+        compute-energy-of-this-movement]
     ]
   ]            
   [ compute-probability-of-this-movement         
@@ -288,7 +399,8 @@ to monte-carlo
       compute-energy-of-this-movement
       ifelse global-energy <= previous-global-energy [ set previous-global-energy global-energy ][
         compute-probability-of-this-movement
-        ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot2 * 90]
+        ifelse random-float 1 < probability [ set previous-global-energy global-energy ] [ rt -1 * rot2 * 90 
+          compute-energy-of-this-movement]
       ]
     ] 
     [ set itrans-accepted 1 ]
@@ -303,11 +415,28 @@ end
 
 ;Compute the energy of each agentset (a cluster of walkers) and keeping track of it
 to compute_energy_of_this_leader 
+  set prev-leader-energy leader-energy
+  
   let dummy-energy 0
-    ask walkers with [leader = [leader] of myself] [
+    ask walkers with [leader = [leader] of myself] 
+    [
       set dummy-energy dummy-energy + walker-energy
     ]    
     set leader-energy dummy-energy
+    
+    ;;update scoreboard
+    if prev-leader-energy != leader-energy
+    [
+      let counter number-of-parts
+      while [counter < number]
+      [
+        if array:item record-low-E counter > leader-energy
+        [
+          array:set record-low-E number-of-parts leader-energy
+        ]
+        set counter counter + 1
+      ]
+    ]
 end
 
 to blue_energy_row
@@ -355,7 +484,7 @@ end
 to black_energy_row
   let cands_on_neighbs walkers-on neighbors4 
         let n-of-same-color count cands_on_neighbs with [color = blue] 
-        ;type "number of blue neighbors " show nblue
+        ;;;type "number of blue neighbors " show nblue
         let counter 0
         while [ counter < n-of-same-color ] [ 
           set counter counter + 1 
@@ -416,17 +545,17 @@ number
 number
 0
 100
-15
+100
 1
 1
 NIL
 HORIZONTAL
 
 PLOT
-8
-126
-208
-276
+5
+200
+205
+350
 Energy
 NIL
 NIL
@@ -441,10 +570,10 @@ PENS
 "default" 1.0 0 -16777216 true "" "plot global-energy"
 
 BUTTON
-18
-64
-84
-97
+22
+86
+88
+119
 NIL
 setup
 NIL
@@ -465,6 +594,23 @@ BUTTON
 NIL
 go
 T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+116
+114
+179
+147
+step
+go
+NIL
 1
 T
 OBSERVER
