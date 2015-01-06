@@ -1,4 +1,4 @@
-globals [
+globals [ 
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
