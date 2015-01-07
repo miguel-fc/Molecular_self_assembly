@@ -5,13 +5,16 @@ extensions [array]
 ;;hypothesis: this problem does not occur when the split function is commented out, but
 ;;almost always occurs when it is not. Maybe there's an issue splitting?
 
+;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
+;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
+
 globals 
 [
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
   maxSize ;;maximum size of each cluster, increases with time
-  growthRate ;;rate that the max size grows
+  logSize
   ;;initializes an array of 100 values to 100. These values will be the record low energies found by each group such that
   ;; energy[a]=b means the lowest energy of a block of size a was b
   record-low-E
@@ -67,12 +70,10 @@ to go
 
   choose_direction
   
-  everybody-merge
+  reorganize
 
   find-global-energy
   ;;type " global energy " show global-energy
-
-  link-all
 
   ;;show-all-stats
 
@@ -99,6 +100,7 @@ end
 
 to split-all
   set maxSize maxSize + growthRate
+  set logSize ln maxSize
   
   let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
 
@@ -133,17 +135,17 @@ while [counter <= max-number-of-parts]
         let leaderon who
         show [who] of self
         ;;type "leaderon " show leaderon
-        ask other walkers with [leader = [leader] of myself] 
+        ask other walkers with [the-same-leader] 
         [
           ;;type "parts of this leader"  show walker-energy
         ]
-        ask max-one-of walkers with [leader = [leader] of myself] [walker-energy] 
+        ask max-one-of walkers with [the-same-leader] [walker-energy] 
         [
           ;;makes a new leader, if necessary
           if who = leaderon 
           [
-            let new-leader one-of other walkers with [leader = [leader] of myself]
-            ask other walkers with [leader = [leader] of myself]
+            let new-leader one-of other walkers with [the-same-leader]
+            ask other walkers with [the-same-leader]
             [
               set leader new-leader
             ]
@@ -158,11 +160,7 @@ while [counter <= max-number-of-parts]
     
     ;;re-evaluate leaders and existance and such
     find-global-energy
-    everybody-merge
-    ask walkers with [leader = self]
-    [
-      link-up
-    ]
+    reorganize
   ]
   set counter counter + 1  
 ]
@@ -250,18 +248,23 @@ to find-global-energy
    
 end
 
+to reorganize
+  link-all
+  merge-all
+end
+
 ; Merges agents when they are next to each other.
 to merge 
       set leader [leader] of myself
-      ask link-neighbors with [leader != [leader] of myself] 
+      ask link-neighbors with [not the-same-leader] 
       [ merge ]
 end
 
-to everybody-merge
+to merge-all
   ask walkers 
   [
   ;;let cands-on-neighbs walkers-on neighbors4
-  let candidates (walkers-on neighbors4) with [leader != [leader] of myself]  
+  let candidates (walkers-on neighbors4) with [not the-same-leader]  
   
   if any? candidates
   [ 
@@ -273,9 +276,9 @@ end
 
 ; Links each leader to its parts
 to link-up
-  ask walkers with [leader = [leader] of myself] [ask my-links [untie die]]
+  ask walkers with [the-same-leader] [ask my-links [untie die]]
   set number-of-parts 1
-  let otherneighbors other walkers with [leader = [leader] of myself]
+  let otherneighbors other walkers with [the-same-leader]
   create-links-with otherneighbors [tie hide-link]
   set number-of-parts number-of-parts + count otherneighbors 
 end  
@@ -289,6 +292,11 @@ to link-all
  ]
 end
 
+to destroy-all-my-links
+  ask my-links [untie die]
+  ask my-in-links [untie die]
+  ask my-out-links [untie die]
+end
 
 ; Required to move agents on the grid
 to set-location [new-location]  
@@ -299,11 +307,11 @@ end
 ; Evaluates the energy of a translational movement
 to compute-energy-of-this-movement
   let ifind 0
-  ifelse any? other walkers-here with [leader != [leader] of myself] 
+  ifelse any? other walkers-here with [not the-same-leader] 
   [set ifind 1][
-    if any? link-neighbors with [leader = [leader] of myself] [
-      ask link-neighbors with [leader = [leader] of myself] [
-        if any? other walkers-here with [leader != [leader] of myself] [set ifind 1]  
+    if any? link-neighbors with [the-same-leader] [
+      ask link-neighbors with [the-same-leader] [
+        if any? other walkers-here with [not the-same-leader] [set ifind 1]  
       ]               
     ]
   ]
@@ -318,9 +326,9 @@ to rotate
   let ifindrot 0
   let rot1 random 4
   rt rot1 * 90  
-  if any? link-neighbors with [leader = [leader] of myself] [
-    ask link-neighbors with [leader = [leader] of myself] [
-      if any? other walkers-here with [leader != [leader] of myself] [set ifindrot 1]                
+  if any? link-neighbors with [the-same-leader] [
+    ask link-neighbors with [the-same-leader] [
+      if any? other walkers-here with [not the-same-leader] [set ifindrot 1]                
     ]
   ]
   if ifindrot = 1 [rt -1 * rot1 * 90]
@@ -378,7 +386,7 @@ to compute_energy_of_this_leader
   set prev-leader-energy leader-energy
   
   let dummy-energy 0
-    ask walkers with [leader = [leader] of myself] 
+    ask walkers with [the-same-leader] 
     [
       set dummy-energy dummy-energy + walker-energy
     ]    
@@ -466,6 +474,10 @@ to show-all-stats
     show count my-links
   ]
 end
+
+to-report the-same-leader
+  report leader = [leader] of myself
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -495,15 +507,15 @@ ticks
 30.0
 
 SLIDER
-19
-18
-191
-51
+665
+57
+837
+90
 number
 number
 0
 100
-100
+52
 1
 1
 NIL
@@ -577,6 +589,31 @@ NIL
 NIL
 NIL
 1
+
+CHOOSER
+677
+101
+819
+146
+exhaustiveSplitting
+exhaustiveSplitting
+true false
+0
+
+SLIDER
+856
+10
+893
+477
+growthRate
+growthRate
+0
+1
+1
+.01
+1
+Size/tick
+VERTICAL
 
 @#$#@#$#@
 ## WHAT IS IT?
