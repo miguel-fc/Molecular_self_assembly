@@ -3,12 +3,15 @@ extensions [array]
 ;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
 ;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
 
+;;Bug: somehow squares somehow end up on top of each other...
+
 globals 
 [
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
   maxSize ;;maximum size of each cluster, increases with time
+  linSize
   logSize
   ;;initializes an array of 100 values to 100. These values will be the record low energies found by each group such that
   ;; energy[a]=b means the lowest energy of a block of size a was b
@@ -87,6 +90,18 @@ to go
   tick
 end
 
+to inc-max-size
+  set linSize linSize + growthRate
+  set logSize ln linSize
+  ifelse size-growth-type = "linear"
+  [
+   set maxSize linSize
+  ]
+  [
+    set maxSize ln linSize
+  ]
+end
+
 to split
   set leader self 
   ;;set color yellow
@@ -95,8 +110,7 @@ to split
 end
 
 to split-all
-  set maxSize maxSize + growthRate
-  set logSize ln maxSize
+  inc-max-size
   
   let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
 
@@ -236,9 +250,9 @@ to find-global-energy
   ask walkers 
   [
     set walker-energy 0
-    if [color] of self  = blue [blue_energy_row]                        
-    if [color] of self  = red [red_energy_row]    
-    if [color] of self  = black [black_energy_row] 
+    if [color] of self  = blue [total-energy-for -5.5 4.5 -.5]                        
+    if [color] of self  = red [total-energy-for 4.5 -5.5 -.5]    
+    if [color] of self  = black [total-energy-for -.5 -.5 -.5  ] 
     set global-energy global-energy + walker-energy
   ]
    
@@ -398,43 +412,11 @@ to compute_energy_of_this_leader
       [
         if array:item record-low-E counter > leader-energy
         [
-          array:set record-low-E number-of-parts leader-energy
+          array:set record-low-E counter leader-energy
         ]
         set counter counter + 1
       ]
     ]
-end
-
-to blue_energy_row
- ; let cands walkers-on neighbors4          
- ;       
- ; set walker-energy walker-energy + 
- ;    total-energy-of-color black (-.5) cands +
- ;    total-energy-of-color blue (4.5) cands +
- ;   total-energy-of-color red (-5.5) cands
- 
- total-energy-for -5.5 4.5 -.5
-end
-
-to red_energy_row
-   ;     let cands walkers-on neighbors4
-   ;     
-   ;  set walker-energy walker-energy + 
-   ;     total-energy-of-color black (-.5) cands +
-   ;     total-energy-of-color blue (-5.5) cands +
-   ;     total-energy-of-color red (4.5) cands
-   total-energy-for 4.5 -5.5 -.5
-end
-
-to black_energy_row
-  ;let cands walkers-on neighbors4 
-         
-  ;set walker-energy walker-energy + 
-  ;   total-energy-of-color black (-.5) cands +
-  ;   total-energy-of-color blue (-.5) cands +
-  ;   total-energy-of-color red (-.5) cands
-   
-   total-energy-for -.5 -.5 -.5     
 end
 
 to-report total-energy-of-color [clr val group]
@@ -533,10 +515,10 @@ NIL
 HORIZONTAL
 
 PLOT
-5
-200
-205
-350
+4
+10
+204
+160
 Energy
 NIL
 NIL
@@ -551,10 +533,10 @@ PENS
 "default" 1.0 0 -16777216 true "" "plot global-energy"
 
 BUTTON
-22
-86
-88
-119
+655
+14
+721
+47
 NIL
 setup
 NIL
@@ -568,10 +550,10 @@ NIL
 1
 
 BUTTON
-116
-66
-180
-99
+724
+15
+788
+48
 NIL
 go
 T
@@ -585,10 +567,10 @@ NIL
 1
 
 BUTTON
-116
-114
-179
-147
+791
+14
+854
+47
 step
 go
 NIL
@@ -620,11 +602,131 @@ growthRate
 growthRate
 0
 1
-0.03333333333333333
+0
 .01
 1
 Size/tick
 VERTICAL
+
+CHOOSER
+687
+175
+825
+220
+size-growth-type
+size-growth-type
+"linear" "log"
+0
+
+MONITOR
+10
+169
+67
+214
+Min 2
+array:item record-low-E 2
+1
+1
+11
+
+MONITOR
+71
+168
+128
+213
+Min 3
+array:item record-low-E 3
+17
+1
+11
+
+MONITOR
+132
+168
+189
+213
+Min 4
+array:item record-low-E 4
+17
+1
+11
+
+MONITOR
+11
+216
+68
+261
+Min 5
+array:item record-low-E 5
+17
+1
+11
+
+MONITOR
+70
+216
+127
+261
+Min 6
+array:item record-low-E 6
+17
+1
+11
+
+MONITOR
+133
+214
+190
+259
+Min 7
+array:item record-low-E 7
+17
+1
+11
+
+MONITOR
+12
+264
+69
+309
+Min 8
+array:item record-low-E 8
+17
+1
+11
+
+MONITOR
+73
+264
+130
+309
+Min 9
+array:item record-low-E 9
+17
+1
+11
+
+MONITOR
+133
+264
+190
+309
+Min 10
+array:item record-low-E 10
+17
+1
+11
+
+MONITOR
+78
+364
+142
+409
+NIL
+maxSize
+1
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
