@@ -5,6 +5,9 @@ extensions [array]
 ;;hypothesis: this problem does not occur when the split function is commented out, but
 ;;almost always occurs when it is not. Maybe there's an issue splitting?
 
+;;Problem occurs when a part is split away that joined together two otherwise seperate pieces. It was the bridge
+;;between them, and now its gone.
+
 ;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
 ;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
 
@@ -68,14 +71,17 @@ end
 ;Main loop.
 to go
 
-  choose_direction
+  split-all
   
   reorganize
+  
+  choose_direction
+  
 
   find-global-energy
-  ;;type " global energy " show global-energy
+  ;;type " global energy " ;;show global-energy
 
-  ;;show-all-stats
+  show-all-stats
 
   ask nodes 
   [
@@ -83,8 +89,6 @@ to go
     [set full 0]
     [set full 1]
   ]
-
-  split-all
 
   update-plot 
   
@@ -94,7 +98,7 @@ end
 to split
   set leader self 
   ;;set color yellow
-  ask my-links [untie die] 
+  destroy-all-my-links 
   move-to one-of nodes with [full = 0] 
 end
 
@@ -113,17 +117,17 @@ while [counter <= max-number-of-parts]
   [
     ;;uno is the normalized energy, that is, E/n
     let uno-who 0 ;;uno-who is the one with the energy
-    let will-split false
     
     
     let uno (array:item record-low-E counter) / counter
-    ;;type "minimum record energy for " show counter ;;type " parts: " show uno
+    ;;type "minimum record energy for " ;;show counter ;;type " parts: " ;;show uno
     
     ask walkers with [leader = self and number-of-parts = counter] 
     [ 
+       let will-split false
        let dos-who who ;;that's dos as in the spanish number
        let dos leader-energy  / number-of-parts 
-       ;;type "normalized energy of this other leader:" show dos
+       ;;type "normalized energy of this other leader:" ;;show dos
        if (dos != 0 and dos > uno) or (number-of-parts > maxSize)
        [
         set will-split true
@@ -133,21 +137,21 @@ while [counter <= max-number-of-parts]
       [
         ;;type " split this leader" 
         let leaderon who
-        show [who] of self
-        ;;type "leaderon " show leaderon
+        ;;show [who] of self
+        ;;type "leaderon " ;;show leaderon
         ask other walkers with [the-same-leader] 
         [
-          ;;type "parts of this leader"  show walker-energy
+          ;;type "parts of this leader"  ;;show walker-energy
         ]
         ask max-one-of walkers with [the-same-leader] [walker-energy] 
         [
-          ;;makes a new leader, if necessary
+          ;;accounts for the splitt-ee being the leader
           if who = leaderon 
           [
-            let new-leader one-of other walkers with [the-same-leader]
+            ;;let new-leader one-of other walkers with [the-same-leader]
             ask other walkers with [the-same-leader]
             [
-              set leader new-leader
+              set leader self
             ]
           ]
           
@@ -249,8 +253,8 @@ to find-global-energy
 end
 
 to reorganize
-  link-all
   merge-all
+  link-all
 end
 
 ; Merges agents when they are next to each other.
@@ -276,10 +280,12 @@ end
 
 ; Links each leader to its parts
 to link-up
-  ask walkers with [the-same-leader] [ask my-links [untie die]]
+  ask walkers with [the-same-leader] 
+    [destroy-all-my-links]
   set number-of-parts 1
   let otherneighbors other walkers with [the-same-leader]
   create-links-with otherneighbors [tie hide-link]
+  
   set number-of-parts number-of-parts + count otherneighbors 
 end  
 
@@ -294,8 +300,8 @@ end
 
 to destroy-all-my-links
   ask my-links [untie die]
-  ask my-in-links [untie die]
-  ask my-out-links [untie die]
+  ;;ask my-in-links [untie die]
+  ;;ask my-out-links [untie die]
 end
 
 ; Required to move agents on the grid
@@ -449,29 +455,29 @@ end
 
 
 to show-all-stats
-  show " Energy of each walker"
+  ;;show " Energy of each walker"
   ask walkers 
   [
-    show walker-energy
+    ;;show walker-energy
   ]
 
-  show " Energy of each leader "
+  ;;show " Energy of each leader "
   ask walkers with [leader = self] 
   [
-    show leader-energy 
+    ;;show leader-energy 
   ]
 
-  show " # of parts of each leader"
+  ;;show " # of parts of each leader"
   ask walkers with [leader = self]  
   [
-    show number-of-parts
+    ;;show number-of-parts
     let unique-parts number-of-parts
   ]
 
-  show "links of each walker"
+  ;;show "links of each walker"
   ask walkers  
   [
-    show count my-links
+    ;;show count my-links
   ]
 end
 
@@ -515,7 +521,7 @@ number
 number
 0
 100
-52
+62
 1
 1
 NIL
@@ -609,7 +615,7 @@ growthRate
 growthRate
 0
 1
-1
+0.03333333333333333
 .01
 1
 Size/tick
