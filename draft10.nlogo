@@ -1,13 +1,5 @@
 extensions [array]
 
-;;Known bug: merging between clusters that only touch diagonally
-;;fix: I HAVE NO IDEA
-;;hypothesis: this problem does not occur when the split function is commented out, but
-;;almost always occurs when it is not. Maybe there's an issue splitting?
-
-;;Problem occurs when a part is split away that joined together two otherwise seperate pieces. It was the bridge
-;;between them, and now its gone.
-
 ;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
 ;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
 
@@ -414,31 +406,35 @@ to compute_energy_of_this_leader
 end
 
 to blue_energy_row
-  let cands walkers-on neighbors4          
-        
-  set walker-energy walker-energy + 
-     total-energy-of-color black (-.5) cands +
-     total-energy-of-color blue (4.5) cands +
-     total-energy-of-color red (-5.5) cands
+ ; let cands walkers-on neighbors4          
+ ;       
+ ; set walker-energy walker-energy + 
+ ;    total-energy-of-color black (-.5) cands +
+ ;    total-energy-of-color blue (4.5) cands +
+ ;   total-energy-of-color red (-5.5) cands
+ 
+ total-energy-for -5.5 4.5 -.5
 end
 
 to red_energy_row
-        let cands walkers-on neighbors4
-        
-     set walker-energy walker-energy + 
-        total-energy-of-color black (-.5) cands +
-        total-energy-of-color blue (-5.5) cands +
-        total-energy-of-color red (4.5) cands
+   ;     let cands walkers-on neighbors4
+   ;     
+   ;  set walker-energy walker-energy + 
+   ;     total-energy-of-color black (-.5) cands +
+   ;     total-energy-of-color blue (-5.5) cands +
+   ;     total-energy-of-color red (4.5) cands
+   total-energy-for 4.5 -5.5 -.5
 end
 
 to black_energy_row
-  let cands walkers-on neighbors4 
+  ;let cands walkers-on neighbors4 
          
-  set walker-energy walker-energy + 
-     total-energy-of-color black (-.5) cands +
-     total-energy-of-color blue (-.5) cands +
-     total-energy-of-color red (-.5) cands
-        
+  ;set walker-energy walker-energy + 
+  ;   total-energy-of-color black (-.5) cands +
+  ;   total-energy-of-color blue (-.5) cands +
+  ;   total-energy-of-color red (-.5) cands
+   
+   total-energy-for -.5 -.5 -.5     
 end
 
 to-report total-energy-of-color [clr val group]
@@ -451,6 +447,15 @@ to-report total-energy-of-color [clr val group]
     set total total + val
   ]
   report total
+end
+
+to total-energy-for [rd blu blk]
+  let cands walkers-on neighbors4 
+         
+  set walker-energy walker-energy + 
+     total-energy-of-color black (blk) cands +
+     total-energy-of-color blue (blu) cands +
+     total-energy-of-color red (rd) cands
 end
 
 
@@ -609,7 +614,7 @@ true false
 SLIDER
 856
 10
-893
+889
 477
 growthRate
 growthRate
