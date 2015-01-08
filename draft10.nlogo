@@ -3,13 +3,13 @@ extensions [array]
 ;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
 ;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
 
-;;Bug: somehow squares somehow end up on top of each other...
 
 globals 
 [
   colors           ;; colors we are using
   global-energy    ;; total global-energy of the system
   previous-global-energy ;; total previous-global-energy of the system (before an attempted move)
+  min-global-energy
   maxSize ;;maximum size of each cluster, increases with time
   linSize
   logSize
@@ -31,10 +31,12 @@ to setup
   ask patches
   [ 
     sprout-nodes 1
-    [ set color white ;; white
+    [ 
+      set color white ;; white
       set size 1.2
-     ] 
-   ]
+      set full 0
+    ] 
+  ]
   ;; Connect the nodes to make a lattice
   ask nodes
   [ 
@@ -46,27 +48,67 @@ to setup
 ;;Put "walkers" on the lattice
   set-default-shape walkers "square"
   set colors [red blue black] ; different colors represent -/+/neutral charges.
-  create-walkers number
-  [
-    set color item random 3 colors
-    set location one-of nodes
-    set leader self
-    move-to location
-  ]
+  make-walkers
   
   set record-low-E array:from-list n-values (number + 1) [100]
   ;;Create scoreboard array
   
-  set maxSize 2
-  set growthRate 1 / 30
+  set linSize 2
   
   reset-ticks
+end
+
+to make-walkers
+  if sim-type = "random"
+  [
+    create-walkers number
+    [
+      set color item random 3 colors
+      set location one-of nodes with [full = 0]
+      ask location [set full 1]
+      set leader self
+      move-to location
+    ]
+  ]
+  
+  if sim-type = "20 20 10"
+  [
+    set number 50
+    spawn-n-walkers-of-color blue 20
+    spawn-n-walkers-of-color red 20
+    spawn-n-walkers-of-color black 10
+  ]
+end
+
+to spawn-n-walkers-of-color [clr n]
+  create-walkers n
+    [
+      set color clr
+      set location one-of nodes with [full = 0]
+      ask location [set full 1]
+      set leader self
+      move-to location
+    ]
 end
 
 ;Main loop.
 to go
 
-  split-all
+  if not infinite and ticks >= stop-point
+    [stop]
+  
+  if splitting
+    [
+      inc-max-size
+      split-all
+      if exhaustiveSplitting
+      [
+        while [any? walkers with [leader = self and number-of-parts > maxSize] ]
+          [
+            split-all
+          ]
+      ]
+    ]
   
   reorganize
   
@@ -78,14 +120,9 @@ to go
 
   show-all-stats
 
-  ask nodes 
-  [
-    ifelse not any? walkers-here 
-    [set full 0]
-    [set full 1]
-  ]
+  nodes-check-if-full
 
-  update-plot 
+  ;;update-plot 
   
   tick
 end
@@ -104,13 +141,13 @@ end
 
 to split
   set leader self 
-  ;;set color yellow
-  destroy-all-my-links 
-  move-to one-of nodes with [full = 0] 
+  ;;set color green
+  destroy-all-my-links
+  let new-loc one-of nodes with [full = 0] 
+  move-to new-loc
 end
 
 to split-all
-  inc-max-size
   
   let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
 
@@ -242,6 +279,15 @@ to choose_direction
         ]                             
       ]   
 end
+
+to nodes-check-if-full
+  ask nodes 
+  [
+    ifelse any? walkers-here 
+    [set full 1]
+    [set full 0]
+  ]
+end
  
 
 ;Finds the total global-energy (Note the /2 is to avoid double counting).
@@ -256,6 +302,8 @@ to find-global-energy
     set global-energy global-energy + walker-energy
   ]
    
+   if global-energy < min-global-energy
+     [set min-global-energy global-energy]
 end
 
 to reorganize
@@ -312,24 +360,29 @@ end
 
 ; Required to move agents on the grid
 to set-location [new-location]  
+  ask location [set full 0]
   set location new-location
   move-to new-location
+  ask location [set full 1]
 end
 
 ; Evaluates the energy of a translational movement
 to compute-energy-of-this-movement
   let ifind 0
   ifelse any? other walkers-here with [not the-same-leader] 
-  [set ifind 1][
-    if any? link-neighbors with [the-same-leader] [
-      ask link-neighbors with [the-same-leader] [
-        if any? other walkers-here with [not the-same-leader] [set ifind 1]  
+  [set ifind 1]
+  [
+    if any? link-neighbors with [the-same-leader] 
+    [
+      ask link-neighbors with [the-same-leader] 
+      [
+        if any? other walkers-here with [not the-same-leader] 
+        [set ifind 1]  
       ]               
     ]
   ]
   ifelse ifind = 0 
-    [find-global-energy 
-    ]
+    [find-global-energy]
     [set global-energy 1000]
 end
 
@@ -508,7 +561,7 @@ number
 number
 0
 100
-62
+50
 1
 1
 NIL
@@ -520,13 +573,13 @@ PLOT
 204
 160
 Energy
-NIL
-NIL
+ticks
+Energy
 0.0
+2000.0
+-1300.0
 10.0
-0.0
-10.0
-true
+false
 false
 "" ""
 PENS
@@ -584,35 +637,20 @@ NIL
 1
 
 CHOOSER
-677
-101
-819
-146
+675
+139
+817
+184
 exhaustiveSplitting
 exhaustiveSplitting
 true false
-0
-
-SLIDER
-856
-10
-889
-477
-growthRate
-growthRate
-0
 1
-0
-.01
-1
-Size/tick
-VERTICAL
 
 CHOOSER
-687
-175
-825
-220
+684
+431
+822
+476
 size-growth-type
 size-growth-type
 "linear" "log"
@@ -724,6 +762,104 @@ MONITOR
 409
 NIL
 maxSize
+1
+1
+11
+
+SWITCH
+689
+94
+797
+127
+splitting
+splitting
+1
+1
+-1000
+
+CHOOSER
+680
+195
+818
+240
+sim-type
+sim-type
+"random" "20 20 10"
+1
+
+MONITOR
+9
+423
+66
+468
+reds
+count walkers with [color = red]
+17
+1
+11
+
+MONITOR
+69
+425
+126
+470
+blues
+count walkers with [color = blue]
+17
+1
+11
+
+MONITOR
+129
+422
+186
+467
+blacks
+count walkers with [color = black]
+17
+1
+11
+
+SWITCH
+682
+256
+785
+289
+infinite
+infinite
+1
+1
+-1000
+
+INPUTBOX
+674
+296
+829
+356
+stop-point
+2000
+1
+0
+Number
+
+INPUTBOX
+675
+358
+830
+418
+growthRate
+0.02
+1
+0
+Number
+
+MONITOR
+67
+314
+148
+359
+Min Energy
+min-global-energy
 1
 1
 11
