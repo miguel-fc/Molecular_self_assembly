@@ -3,6 +3,8 @@ extensions [array]
 ;;Observation: if there are enough agents on screen, then clusters will build faster than they can split though the limitation
 ;;of their size. This could simulate a system in which molecules and clusters form not with perfect stability, but with speed?
 
+;;Possible experiemnt: does adding neutral agents increase or decrease rate of reaction?
+
 
 globals 
 [
@@ -93,7 +95,8 @@ end
 
 ;Main loop.
 to go
-
+  type "Tick " show ticks
+  
   if not infinite and ticks >= stop-point
     [stop]
   
@@ -121,8 +124,6 @@ to go
   show-all-stats
 
   nodes-check-if-full
-
-  ;;update-plot 
   
   tick
 end
@@ -144,73 +145,40 @@ to split
   ;;set color green
   destroy-all-my-links
   let new-loc one-of nodes with [full = 0] 
-  move-to new-loc
+  set-location new-loc
 end
 
 to split-all
-  
-  let max-number-of-parts max [number-of-parts] of walkers with [leader = self]
-
-let counter 2 ;;counter will start at 2
-while [counter <= max-number-of-parts] 
-[
-  ;let did-split false
-  
-  if any? walkers with [leader = self and number-of-parts = counter] 
-  [
-    ;;uno is the normalized energy, that is, E/n
-    let uno-who 0 ;;uno-who is the one with the energy
-    
-    
-    let uno (array:item record-low-E counter) / counter
-    ;;type "minimum record energy for " ;;show counter ;;type " parts: " ;;show uno
-    
-    ask walkers with [leader = self and number-of-parts = counter] 
+;;************
+    ask walkers with 
+    [
+       leader = self and number-of-parts > 1 and
+       ( (array:item record-low-E number-of-parts < leader-energy) or (number-of-parts > maxSize) )
+       ;;will split
+    ] 
     [ 
-       let will-split false
-       let dos-who who ;;that's dos as in the spanish number
-       let dos leader-energy  / number-of-parts 
-       ;;type "normalized energy of this other leader:" ;;show dos
-       if (dos != 0 and dos > uno) or (number-of-parts > maxSize)
+
+       let leaderon who
+       ask max-one-of walkers with [the-same-leader] [walker-energy] 
        [
-        set will-split true
-       ]
-     
-      if will-split
-      [
-        ;;type " split this leader" 
-        let leaderon who
-        ;;show [who] of self
-        ;;type "leaderon " ;;show leaderon
-        ask other walkers with [the-same-leader] 
-        [
-          ;;type "parts of this leader"  ;;show walker-energy
-        ]
-        ask max-one-of walkers with [the-same-leader] [walker-energy] 
-        [
-          ;;accounts for the splitt-ee being the leader
-          if who = leaderon 
-          [
-            ;;let new-leader one-of other walkers with [the-same-leader]
-            ask other walkers with [the-same-leader]
-            [
-              set leader self
-            ]
-          ]
-          
+         ;;accounts for the splitt-ee being the leader
+         if who = leaderon
+         [
+           ;;let new-leader one-of other walkers with [the-same-leader]
+           ask other walkers with [the-same-leader]
+           [
+             set leader self
+           ]
+         ]
+         ;;***********
           split
+          ;;nodes-check-if-full
         ]
       
-      ]         
-       
-    ]
-    
+    ]         
+      
     ;;re-evaluate leaders and existance and such
-    find-global-energy
     reorganize
-  ]
-  set counter counter + 1  
-]
 
 end
 
@@ -245,7 +213,7 @@ to choose_direction
         ;down
         if movement = 1 
         [
-          set-location one-of [link-neighbors at-points [[0 -1] ] ] of location
+          set-location one-of [link-neighbors at-points [[0 -1] ]]  of location
           monte-carlo
           if itrans-accepted = 1 
           [
@@ -286,6 +254,10 @@ to nodes-check-if-full
     ifelse any? walkers-here 
     [set full 1]
     [set full 0]
+    
+    ifelse count walkers-here > 1
+    [set color violet type "FUCK"]
+    [set color white]
   ]
 end
  
@@ -321,7 +293,6 @@ end
 to merge-all
   ask walkers 
   [
-  ;;let cands-on-neighbs walkers-on neighbors4
   let candidates (walkers-on neighbors4) with [not the-same-leader]  
   
   if any? candidates
@@ -336,35 +307,37 @@ end
 to link-up
   ask walkers with [the-same-leader] 
     [destroy-all-my-links]
-  set number-of-parts 1
+
   let otherneighbors other walkers with [the-same-leader]
   create-links-with otherneighbors [tie hide-link]
   
-  set number-of-parts number-of-parts + count otherneighbors 
+  set number-of-parts 1 + count otherneighbors 
 end  
 
 to link-all
   ask walkers with [leader = self] 
  [
   link-up 
-  set leader-energy 0
   compute_energy_of_this_leader
  ]
 end
 
 to destroy-all-my-links
   ask my-links [untie die]
-  ;;ask my-in-links [untie die]
-  ;;ask my-out-links [untie die]
 end
 
 ; Required to move agents on the grid
 to set-location [new-location]  
+  if ([full] of new-location = 0)
+  [
   ask location [set full 0]
   set location new-location
   move-to new-location
   ask location [set full 1]
+  ]
 end
+
+;;location is node?
 
 ; Evaluates the energy of a translational movement
 to compute-energy-of-this-movement
@@ -382,7 +355,7 @@ to compute-energy-of-this-movement
     ]
   ]
   ifelse ifind = 0 
-    [find-global-energy]
+    [find-global-energy];
     [set global-energy 1000]
 end
 
@@ -427,7 +400,7 @@ to try-to-rotate
   set previous-global-energy global-energy
   let rot random 4 
   rt rot * 90 
-  compute-energy-of-this-movement
+  compute-energy-of-this-movement  ;;check
   ifelse global-energy <= previous-global-energy
   [ 
     set previous-global-energy global-energy 
@@ -436,7 +409,10 @@ to try-to-rotate
     compute-probability-of-this-movement
     ifelse random-float 1 < probability 
     [ set previous-global-energy global-energy ] 
-    [ rt -1 * rot * 90 compute-energy-of-this-movement]
+    [ 
+      rt -1 * rot * 90 
+      compute-energy-of-this-movement
+    ]
   ]
 end
 
@@ -449,7 +425,7 @@ end
 ;Compute the energy of each agentset (a cluster of walkers) and keeping track of it
 to compute_energy_of_this_leader 
   set prev-leader-energy leader-energy
-  
+
   let dummy-energy 0
     ask walkers with [the-same-leader] 
     [
@@ -579,7 +555,7 @@ Energy
 2000.0
 -1300.0
 10.0
-false
+true
 false
 "" ""
 PENS
@@ -773,7 +749,7 @@ SWITCH
 127
 splitting
 splitting
-1
+0
 1
 -1000
 
@@ -827,7 +803,7 @@ SWITCH
 289
 infinite
 infinite
-1
+0
 1
 -1000
 
