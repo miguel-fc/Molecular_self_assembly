@@ -179,6 +179,7 @@ to split-all
       
     ;;re-evaluate leaders and existance and such
     reorganize
+    find-global-energy
 
 end
 
@@ -307,17 +308,18 @@ end
 to link-up
   ask walkers with [the-same-leader] 
     [destroy-all-my-links]
-
+  set number-of-parts 1
   let otherneighbors other walkers with [the-same-leader]
   create-links-with otherneighbors [tie hide-link]
   
-  set number-of-parts 1 + count otherneighbors 
+  set number-of-parts number-of-parts + count otherneighbors 
 end  
 
 to link-all
   ask walkers with [leader = self] 
  [
   link-up 
+  set leader-energy 0
   compute_energy_of_this_leader
  ]
 end
