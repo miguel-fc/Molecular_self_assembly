@@ -5,6 +5,7 @@ extensions [array]
 
 ;;Possible experiemnt: does adding neutral agents increase or decrease rate of reaction?
 
+;;Weird idea: having agents that can overlap can simulate the formation of molecules in dimensions greater than 3?
 
 globals 
 [
@@ -95,7 +96,7 @@ end
 
 ;Main loop.
 to go
-  type "Tick " show ticks
+  ;;type "Tick " show ticks
   
   if not infinite and ticks >= stop-point
     [stop]
@@ -172,7 +173,7 @@ to split-all
          ]
          ;;***********
           split
-          ;;nodes-check-if-full
+          find-global-energy
         ]
       
     ]         
@@ -209,7 +210,7 @@ to choose_direction
         [
           try-to-rotate
         ]
-            
+  
 
         ;down
         if movement = 1 
@@ -245,8 +246,11 @@ to choose_direction
           monte-carlo
           if itrans-accepted = 1 [set-location one-of [link-neighbors at-points [[1 0] ] ] of location
             compute-energy-of-this-movement]
-        ]                             
-      ]   
+        ]  
+        
+                         
+      ]
+     
 end
 
 to nodes-check-if-full
@@ -257,7 +261,7 @@ to nodes-check-if-full
     [set full 0]
     
     ifelse count walkers-here > 1
-    [set color violet type "FUCK"]
+    [set color violet type "UHOH"]
     [set color white]
   ]
 end
@@ -308,11 +312,11 @@ end
 to link-up
   ask walkers with [the-same-leader] 
     [destroy-all-my-links]
-  set number-of-parts 1
   let otherneighbors other walkers with [the-same-leader]
-  create-links-with otherneighbors [tie hide-link]
+  create-links-with otherneighbors [tie ;hide-link]
+  ]
   
-  set number-of-parts number-of-parts + count otherneighbors 
+  set number-of-parts 1 + count otherneighbors 
 end  
 
 to link-all
@@ -339,7 +343,6 @@ to set-location [new-location]
   ]
 end
 
-;;location is node?
 
 ; Evaluates the energy of a translational movement
 to compute-energy-of-this-movement
@@ -347,7 +350,7 @@ to compute-energy-of-this-movement
   ifelse any? other walkers-here with [not the-same-leader] 
   [set ifind 1]
   [
-    if any? link-neighbors with [the-same-leader] 
+    if any? link-neighbors with [the-same-leader] ;;why links AND leader?
     [
       ask link-neighbors with [the-same-leader] 
       [
@@ -366,9 +369,12 @@ to rotate
   let ifindrot 0
   let rot1 random 4
   rt rot1 * 90  
-  if any? link-neighbors with [the-same-leader] [
-    ask link-neighbors with [the-same-leader] [
-      if any? other walkers-here with [not the-same-leader] [set ifindrot 1]                
+  if any? link-neighbors with [the-same-leader] 
+  [
+    ask link-neighbors with [the-same-leader] 
+    [
+      if any? other walkers-here with [not the-same-leader] 
+      [set ifindrot 1]                
     ]
   ]
   if ifindrot = 1 [rt -1 * rot1 * 90]
@@ -402,7 +408,7 @@ to try-to-rotate
   set previous-global-energy global-energy
   let rot random 4 
   rt rot * 90 
-  compute-energy-of-this-movement  ;;check
+  compute-energy-of-this-movement
   ifelse global-energy <= previous-global-energy
   [ 
     set previous-global-energy global-energy 
@@ -429,11 +435,11 @@ to compute_energy_of_this_leader
   set prev-leader-energy leader-energy
 
   let dummy-energy 0
-    ask walkers with [the-same-leader] 
+    ask other walkers with [the-same-leader] 
     [
       set dummy-energy dummy-energy + walker-energy
     ]    
-    set leader-energy dummy-energy
+    set leader-energy dummy-energy + walker-energy
     
     ;;update scoreboard
     if prev-leader-energy != leader-energy
